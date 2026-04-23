@@ -288,12 +288,24 @@ export default function Home() {
                 {geese.map((goose, index) => {
                   const isActive = goose.id === selected;
                   const isRightSide = index % 2 === 1;
+                  const isBottomRowMobile = index >= geese.length - 2;
+                  const isBottomRowDesktop = index >= geese.length - 3;
                   const mobilePosition = isRightSide
                     ? "right-0 left-auto translate-x-0"
                     : "left-0 right-auto translate-x-0";
-                  const arrowPosition = isRightSide
-                    ? "right-6 left-auto md:left-1/2 md:right-auto md:-translate-x-1/2"
-                    : "left-6 right-auto md:left-1/2 md:right-auto md:-translate-x-1/2";
+                  const popupPosition = isBottomRowMobile
+                    ? "bottom-full mb-4 top-auto"
+                    : "top-full mt-4 bottom-auto";
+                  const desktopPosition = isBottomRowDesktop
+                    ? "md:bottom-full md:mb-4 md:top-auto"
+                    : "md:top-full md:mt-4 md:bottom-auto";
+                  const arrowPosition = isBottomRowMobile
+                    ? isRightSide
+                      ? "-bottom-2 right-6 left-auto md:left-1/2 md:right-auto md:-translate-x-1/2"
+                      : "-bottom-2 left-6 right-auto md:left-1/2 md:right-auto md:-translate-x-1/2"
+                    : isRightSide
+                      ? "-top-2 right-6 left-auto md:left-1/2 md:right-auto md:-translate-x-1/2"
+                      : "-top-2 left-6 right-auto md:left-1/2 md:right-auto md:-translate-x-1/2";
 
                   return (
                     <div key={goose.id} className="relative">
@@ -317,9 +329,9 @@ export default function Home() {
                       </button>
 
                       {isActive ? (
-                        <div className={`absolute top-full z-20 mt-4 w-[min(320px,calc(100vw-2rem))] ${mobilePosition} md:left-1/2 md:right-auto md:-translate-x-1/2`}>
+                        <div className={`absolute ${popupPosition} z-20 w-[min(320px,calc(100vw-2rem))] ${mobilePosition} ${desktopPosition}`}>
                           <div className="relative origin-top scale-95 rounded-2xl border border-yellow-400/20 bg-black/90 p-4 text-left text-sm text-zinc-200 opacity-0 shadow-2xl shadow-black/50 backdrop-blur-sm motion-safe:animate-[popupIn_220ms_cubic-bezier(0.16,1,0.3,1)_forwards] motion-safe:opacity-100 motion-safe:scale-100 motion-safe:transition motion-safe:duration-200 motion-safe:ease-out">
-                            <div className={`absolute -top-2 h-4 w-4 rotate-45 border-l border-t border-yellow-400/20 bg-black/90 ${arrowPosition}`} />
+                            <div className={`absolute h-4 w-4 rotate-45 border-l border-t border-yellow-400/20 bg-black/90 ${arrowPosition}`} />
                             <p className="text-yellow-200">{goose.title}</p>
                             {goose.description ? <p className="mt-2 leading-6 text-zinc-300">{goose.description}</p> : null}
                             {goose.role ? <p className="mt-2 text-zinc-400">{goose.role}</p> : null}
