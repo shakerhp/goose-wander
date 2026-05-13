@@ -14,12 +14,12 @@ const spriteFrames = gooseKinds.flatMap((kind) =>
 const ENTRY_MS = 6_000;
 const WANDER_MS = 5 * 60 * 1_000;
 const EXIT_MS = 7_500;
-const ENTRY_BLEND_MS = 1_400;
+const ENTRY_BLEND_MS = 2_800;
 const WANDER_TOTAL_MS = ENTRY_MS + WANDER_MS + EXIT_MS;
 
 const WANDER_X_MIN = 6;
 const WANDER_X_MAX = 94;
-const WANDER_Y_MIN = 24;
+const WANDER_Y_MIN = 47;
 const WANDER_Y_MAX = 96;
 
 function seedFromId(id: string) {
@@ -30,33 +30,92 @@ function phaseFromSeed(seed: number) {
   return (seed % 997) / 997;
 }
 
-function wanderPosition(id: string, elapsedMs: number) {
-  const seed = seedFromId(id);
-  const t = elapsedMs / 1000;
-  const phase = phaseFromSeed(seed) * Math.PI * 2;
+/** Deterministic [0, 1) from event id; different salts → uncorrelated streams. */
+function hashFromId(id: string, salt: number): number {
+  let h = (salt + 0x6eed0e9d) >>> 0;
+  for (let i = 0; i < id.length; i++) {
+    h = Math.imul(h ^ id.charCodeAt(i), 0x1000193);
+  }
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x735a2d97);
+  h ^= h >>> 15;
+  return (h >>> 0) / 0xffffffff;
+}
 
-  const travelSpeed = 0.018;
+function wanderPhaseRad(id: string) {
+  const seed = seedFromId(id);
+  const h = hashFromId(id, 5);
+  return (phaseFromSeed(seed) * 0.35 + h * 0.65) * Math.PI * 2;
+}
+
+function wanderPosition(id: string, elapsedMs: number) {
+  const h0 = hashFromId(id, 0);
+  const h1 = hashFromId(id, 1);
+  const h2 = hashFromId(id, 2);
+  const h3 = hashFromId(id, 3);
+  const h4 = hashFromId(id, 4);
+
+  const phase = wanderPhaseRad(id);
+  const phaseY2 = h0 * Math.PI * 2;
+  const t = elapsedMs / 1000;
+
+  const travelSpeed = 0.011 + h1 * 0.024;
   const travel = (t * travelSpeed + phase) % 2;
   const sweep = travel < 1 ? travel : 2 - travel;
-  const x = WANDER_X_MIN + (WANDER_X_MAX - WANDER_X_MIN) * sweep;
-
-  const yWave =
-    62 +
-    Math.sin(t * 0.55 + phase) * 12 +
-    Math.cos(t * 0.23 + phase * 1.7) * 6;
-  const y = Math.min(WANDER_Y_MAX, Math.max(WANDER_Y_MIN, yWave));
-
+  const range = WANDER_X_MAX - WANDER_X_MIN;
   const movingRight = travel < 1;
-  const velocityX = movingRight
-    ? (WANDER_X_MAX - WANDER_X_MIN) * travelSpeed
-    : -(WANDER_X_MAX - WANDER_X_MIN) * travelSpeed;
+  const dSweepDt = movingRight ? travelSpeed : -travelSpeed;
+  let velocityX = range * dSweepDt;
+
+  const wobbleFreq = 0.075 + h3 * 0.16;
+  const wobbleAmp = 1.2 + h4 * 4;
+  const xWobble = Math.sin(t * wobbleFreq + phaseY2) * wobbleAmp;
+  velocityX += Math.cos(t * wobbleFreq + phaseY2) * wobbleAmp * wobbleFreq;
+
+  let x = WANDER_X_MIN + range * sweep + xWobble;
+  x = Math.min(WANDER_X_MAX + 6, Math.max(WANDER_X_MIN - 6, x));
+
+  const yFreq1 = 0.34 + h2 * 0.44;
+  const yFreq2 = 0.1 + h3 * 0.28;
+  const yAmp1 = 6 + h2 * 14;
+  const yAmp2 = 2.5 + h4 * 11;
+  const yCenter = 58 + (h1 - 0.5) * 18;
+  const yWave =
+    yCenter +
+    Math.sin(t * yFreq1 + phase) * yAmp1 +
+    Math.cos(t * yFreq2 + phaseY2 * 1.31) * yAmp2;
+  const y = Math.min(WANDER_Y_MAX, Math.max(WANDER_Y_MIN, yWave));
 
   return { x, y, velocityX, phase };
 }
 
+/** Path time (ms) on the wander curve nearest the post-entry point; cached per event id. */
+const wanderAnchorTimeCache = new Map<string, number>();
+const ANCHOR_SEARCH_STEP_MS = 200;
+const ANCHOR_SEARCH_MAX_MS = 120_000;
+
+function wanderAnchorTimeMs(id: string, entryEndX: number, entryEndY: number): number {
+  const cached = wanderAnchorTimeCache.get(id);
+  if (cached !== undefined) return cached;
+
+  let bestT = 0;
+  let bestScore = Infinity;
+  for (let t = 0; t <= ANCHOR_SEARCH_MAX_MS; t += ANCHOR_SEARCH_STEP_MS) {
+    const p = wanderPosition(id, t);
+    const dx = p.x - entryEndX;
+    const dy = p.y - entryEndY;
+    const score = dx * dx + dy * dy * 0.35;
+    if (score < bestScore) {
+      bestScore = score;
+      bestT = t;
+    }
+  }
+  wanderAnchorTimeCache.set(id, bestT);
+  return bestT;
+}
+
 function wanderStagePosition(id: string, elapsedMs: number) {
-  const seed = seedFromId(id);
-  const phase = phaseFromSeed(seed) * Math.PI * 2;
+  const phase = wanderPhaseRad(id);
 
   if (elapsedMs < ENTRY_MS) {
     const progress = Math.max(0, elapsedMs) / ENTRY_MS;
@@ -69,17 +128,28 @@ function wanderStagePosition(id: string, elapsedMs: number) {
 
   if (elapsedMs < ENTRY_MS + WANDER_MS) {
     const wanderElapsed = elapsedMs - ENTRY_MS;
-    const wandered = wanderPosition(id, wanderElapsed);
 
     if (wanderElapsed < ENTRY_BLEND_MS) {
       const blendT = wanderElapsed / ENTRY_BLEND_MS;
       const entryEndX = 36;
       const entryEndY = 58 + Math.sin(Math.PI * 2 + phase) * 6;
-      const blendX = entryEndX + (wandered.x - entryEndX) * blendT;
-      const blendY = entryEndY + (wandered.y - entryEndY) * blendT;
-      return { x: blendX, y: blendY, facingRight: true };
+      const tAnchor = wanderAnchorTimeMs(id, entryEndX, entryEndY);
+      const wanderJoin = wanderPosition(id, tAnchor);
+      const blendX = entryEndX + (wanderJoin.x - entryEndX) * blendT;
+      const blendY = entryEndY + (wanderJoin.y - entryEndY) * blendT;
+      const dx = wanderJoin.x - entryEndX;
+      const facingRight =
+        Math.abs(dx) > 0.35 ? dx >= 0 : wanderJoin.velocityX >= 0;
+      return { x: blendX, y: blendY, facingRight };
     }
 
+    const tAnchor = wanderAnchorTimeMs(
+      id,
+      36,
+      58 + Math.sin(Math.PI * 2 + phase) * 6,
+    );
+    const pathMs = wanderElapsed - ENTRY_BLEND_MS;
+    const wandered = wanderPosition(id, tAnchor + pathMs);
     return {
       x: wandered.x,
       y: wandered.y,
@@ -89,7 +159,10 @@ function wanderStagePosition(id: string, elapsedMs: number) {
 
   const exitElapsed = elapsedMs - (ENTRY_MS + WANDER_MS);
   const progress = Math.min(1, exitElapsed / EXIT_MS);
-  const exitStart = wanderPosition(id, WANDER_MS);
+  const entryEndX = 36;
+  const entryEndY = 58 + Math.sin(Math.PI * 2 + phase) * 6;
+  const tAnchor = wanderAnchorTimeMs(id, entryEndX, entryEndY);
+  const exitStart = wanderPosition(id, tAnchor + WANDER_MS - ENTRY_BLEND_MS);
   const exitX = 112;
   const x = exitStart.x + (exitX - exitStart.x) * progress;
   const y = exitStart.y + Math.cos(progress * Math.PI * 2 + phase * 0.3) * 2;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 type GooseKind = "original" | "media" | "tradesman" | "nerd" | "paint" | "robot";
 
@@ -89,6 +89,54 @@ function StarIcon({ filled }: { filled: boolean }) {
   );
 }
 
+function GooseDescription({ text, gooseId }: { text: string; gooseId: GooseKind }) {
+  const [expanded, setExpanded] = useState(false);
+  const [isTruncated, setIsTruncated] = useState(false);
+  const paragraphRef = useRef<HTMLParagraphElement>(null);
+
+  useLayoutEffect(() => {
+    setExpanded(false);
+  }, [gooseId]);
+
+  useLayoutEffect(() => {
+    if (expanded) return;
+    const el = paragraphRef.current;
+    if (!el) return;
+    setIsTruncated(el.scrollHeight > el.clientHeight + 1);
+  }, [text, expanded, gooseId]);
+
+  useLayoutEffect(() => {
+    if (expanded) return;
+    const onResize = () => {
+      const el = paragraphRef.current;
+      if (!el) return;
+      setIsTruncated(el.scrollHeight > el.clientHeight + 1);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [expanded, text]);
+
+  return (
+    <div className="mt-1">
+      <p
+        ref={paragraphRef}
+        className={`text-[11px] leading-snug text-zinc-300 ${expanded ? "" : "line-clamp-1"}`}
+      >
+        {text}
+      </p>
+      {isTruncated ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-left text-[10px] font-medium text-yellow-400/90 underline-offset-2 transition hover:text-yellow-300 hover:underline"
+        >
+          {expanded ? "ย่อ" : "เพิ่มเติม"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 const optimisticChannelName = "goose-wander-optimistic";
 
 function broadcastOptimisticGoose(event: { id: string; goose_kind: GooseKind; guest_name: string; rating: number; comment: string | null; created_at: string }) {
@@ -104,14 +152,12 @@ function broadcastOptimisticGoose(event: { id: string; goose_kind: GooseKind; gu
       return;
     }
   } catch {
-    // ignore and fall back to localStorage
   }
 
   try {
     window.localStorage.setItem(optimisticChannelName, payload);
     window.localStorage.removeItem(optimisticChannelName);
   } catch {
-    // ignore storage errors
   }
 }
 
@@ -228,7 +274,7 @@ export default function Home() {
 
               <div className="space-y-2 text-left">
                 <div className="flex items-center gap-3">
-                  <span className="block text-lg font-medium text-zinc-200">ความพึ่งพอใจ</span>
+                  <span className="block text-lg font-medium text-zinc-200">ความพึงพอใจ</span>
                   {ratingMessage ? <p className="text-sm text-red-400">{ratingMessage}</p> : null}
                 </div>
                 <div className="rating mt-3 flex items-center justify-center gap-2">
@@ -294,18 +340,18 @@ export default function Home() {
                     ? "right-0 left-auto translate-x-0"
                     : "left-0 right-auto translate-x-0";
                   const popupPosition = isBottomRowMobile
-                    ? "bottom-full mb-4 top-auto"
-                    : "top-full mt-4 bottom-auto";
+                    ? "bottom-full mb-2 top-auto"
+                    : "top-full mt-2 bottom-auto";
                   const desktopPosition = isBottomRowDesktop
-                    ? "md:bottom-full md:mb-4 md:top-auto"
-                    : "md:top-full md:mt-4 md:bottom-auto";
+                    ? "md:bottom-full md:mb-2 md:top-auto"
+                    : "md:top-full md:mt-2 md:bottom-auto";
                   const arrowPosition = isBottomRowMobile
                     ? isRightSide
-                      ? "-bottom-2 right-6 left-auto md:left-1/2 md:right-auto md:-translate-x-1/2"
-                      : "-bottom-2 left-6 right-auto md:left-1/2 md:right-auto md:-translate-x-1/2"
+                      ? "-bottom-1.5 right-4 left-auto md:left-1/2 md:right-auto md:-translate-x-1/2"
+                      : "-bottom-1.5 left-4 right-auto md:left-1/2 md:right-auto md:-translate-x-1/2"
                     : isRightSide
-                      ? "-top-2 right-6 left-auto md:left-1/2 md:right-auto md:-translate-x-1/2"
-                      : "-top-2 left-6 right-auto md:left-1/2 md:right-auto md:-translate-x-1/2";
+                      ? "-top-1.5 right-4 left-auto md:left-1/2 md:right-auto md:-translate-x-1/2"
+                      : "-top-1.5 left-4 right-auto md:left-1/2 md:right-auto md:-translate-x-1/2";
 
                   return (
                     <div key={goose.id} className="relative">
@@ -329,12 +375,14 @@ export default function Home() {
                       </button>
 
                       {isActive ? (
-                        <div className={`absolute ${popupPosition} z-20 w-[min(320px,calc(100vw-2rem))] ${mobilePosition} ${desktopPosition}`}>
-                          <div className="relative origin-top scale-95 rounded-2xl border border-yellow-400/20 bg-black/90 p-4 text-left text-sm text-zinc-200 opacity-0 shadow-2xl shadow-black/50 backdrop-blur-sm motion-safe:animate-[popupIn_220ms_cubic-bezier(0.16,1,0.3,1)_forwards] motion-safe:opacity-100 motion-safe:scale-100 motion-safe:transition motion-safe:duration-200 motion-safe:ease-out">
-                            <div className={`absolute h-4 w-4 rotate-45 border-l border-t border-yellow-400/20 bg-black/90 ${arrowPosition}`} />
-                            <p className="text-yellow-200">{goose.title}</p>
-                            {goose.description ? <p className="mt-2 leading-6 text-zinc-300">{goose.description}</p> : null}
-                            {goose.role ? <p className="mt-2 text-zinc-400">{goose.role}</p> : null}
+                        <div className={`absolute ${popupPosition} z-20 w-[min(228px,calc(100vw-2rem))] ${mobilePosition} ${desktopPosition}`}>
+                          <div className="relative origin-top scale-[0.98] rounded-xl border border-yellow-400/20 bg-black/90 p-2.5 text-left text-[11px] leading-snug text-zinc-200 opacity-0 shadow-lg shadow-black/40 backdrop-blur-sm motion-safe:animate-[popupIn_220ms_cubic-bezier(0.16,1,0.3,1)_forwards] motion-safe:opacity-100 motion-safe:scale-100 motion-safe:transition motion-safe:duration-200 motion-safe:ease-out">
+                            <div className={`absolute h-3 w-3 rotate-45 border-l border-t border-yellow-400/20 bg-black/90 ${arrowPosition}`} />
+                            <p className="text-[11px] font-medium leading-snug text-yellow-200">{goose.title}</p>
+                            {goose.description ? (
+                              <GooseDescription gooseId={goose.id} text={goose.description} />
+                            ) : null}
+                            {goose.role ? <p className="mt-1.5 text-[10px] leading-snug text-zinc-500">{goose.role}</p> : null}
                           </div>
                         </div>
                       ) : null}
