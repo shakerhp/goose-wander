@@ -89,7 +89,6 @@ function wanderPosition(id: string, elapsedMs: number) {
   return { x, y, velocityX, phase };
 }
 
-/** Path time (ms) on the wander curve nearest the post-entry point; cached per event id. */
 const wanderAnchorTimeCache = new Map<string, number>();
 const ANCHOR_SEARCH_STEP_MS = 200;
 const ANCHOR_SEARCH_MAX_MS = 120_000;

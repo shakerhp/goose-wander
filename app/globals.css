@@ -72,3 +72,27 @@ a {
     transform: translateX(110vw);
   }
 }
+
+/* Goose card detail popup — smooth entrance (no directional slide: works above/below card) */
+@keyframes goose-popup-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+    filter: blur(3px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+
+.goose-popup-panel {
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .goose-popup-panel {
+    animation: goose-popup-in 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}

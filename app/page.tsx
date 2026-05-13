@@ -116,22 +116,27 @@ function GooseDescription({ text, gooseId }: { text: string; gooseId: GooseKind 
     return () => window.removeEventListener("resize", onResize);
   }, [expanded, text]);
 
+  const collapsedTextClass =
+    "max-h-[1.65lh] overflow-hidden [mask-image:linear-gradient(to_bottom,black_68%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,black_68%,transparent_100%)]";
+
   return (
     <div className="mt-1">
       <p
         ref={paragraphRef}
-        className={`text-[11px] leading-snug text-zinc-300 ${expanded ? "" : "line-clamp-1"}`}
+        className={`text-[11px] leading-snug text-zinc-300 ${expanded ? "" : collapsedTextClass}`}
       >
         {text}
       </p>
       {isTruncated ? (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-1 text-left text-[10px] font-medium text-yellow-400/90 underline-offset-2 transition hover:text-yellow-300 hover:underline"
-        >
-          {expanded ? "ย่อ" : "เพิ่มเติม"}
-        </button>
+        <div className="mt-1 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="text-[12px] font-medium text-yellow-400/90 underline-offset-2 transition hover:text-yellow-300 hover:underline"
+          >
+            {expanded ? "ย่อ" : "เพิ่มเติม"}
+          </button>
+        </div>
       ) : null}
     </div>
   );
@@ -376,7 +381,7 @@ export default function Home() {
 
                       {isActive ? (
                         <div className={`absolute ${popupPosition} z-20 w-[min(228px,calc(100vw-2rem))] ${mobilePosition} ${desktopPosition}`}>
-                          <div className="relative origin-top scale-[0.98] rounded-xl border border-yellow-400/20 bg-black/90 p-2.5 text-left text-[11px] leading-snug text-zinc-200 opacity-0 shadow-lg shadow-black/40 backdrop-blur-sm motion-safe:animate-[popupIn_220ms_cubic-bezier(0.16,1,0.3,1)_forwards] motion-safe:opacity-100 motion-safe:scale-100 motion-safe:transition motion-safe:duration-200 motion-safe:ease-out">
+                          <div className="goose-popup-panel relative rounded-xl border border-yellow-400/20 bg-black/90 p-2.5 text-left text-[11px] leading-snug text-zinc-200 shadow-lg shadow-black/40 backdrop-blur-sm">
                             <div className={`absolute h-3 w-3 rotate-45 border-l border-t border-yellow-400/20 bg-black/90 ${arrowPosition}`} />
                             <p className="text-[11px] font-medium leading-snug text-yellow-200">{goose.title}</p>
                             {goose.description ? (
