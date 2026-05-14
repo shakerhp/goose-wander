@@ -75,11 +75,11 @@ export default function DisplayPage() {
         backgroundSize: "100% 100%",
       }}
     >
-      <div className="absolute top-0 left-0 z-50 w-full overflow-hidden mt-10">
+      <div className="absolute top-0 left-0 z-50 w-full overflow-hidden mt-8">
         <div className="flex animate-marquee-right whitespace-nowrap w-max">
           {[...SPONSORS, ...SPONSORS].map((logo, i) => (
             <div key={`${logo}-${i}`} className="mx-12 flex flex-col items-center gap-2">
-              <span className="text-[12px] font-bold tracking-[0.2em] text-black uppercase">
+              <span className="text-[18px] tracking-[0.2em] text-black uppercase">
                 ผู้สนับสนุน
               </span>
               <img
