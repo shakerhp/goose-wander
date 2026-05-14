@@ -96,3 +96,12 @@ a {
     animation: goose-popup-in 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 }
+
+@theme {
+  --animate-marquee-right: marquee-right 40s linear infinite;
+
+  @keyframes marquee-right {
+    from { transform: translateX(-50%); }
+    to { transform: translateX(0%); }
+  }
+}

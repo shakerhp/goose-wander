@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
 import { createAblyRealtimeClient } from "@/lib/ably-client";
 import { type GooseRecord } from "@/lib/goose";
 
@@ -14,7 +13,6 @@ const spriteFrames = gooseKinds.flatMap((kind) =>
 const ENTRY_MS = 6_000;
 const WANDER_MS = 5 * 60 * 1_000;
 const EXIT_MS = 7_500;
-const ENTRY_BLEND_MS = 2_800;
 const WANDER_TOTAL_MS = ENTRY_MS + WANDER_MS + EXIT_MS;
 
 const WANDER_X_MIN = 6;
@@ -30,229 +28,44 @@ function phaseFromSeed(seed: number) {
   return (seed % 997) / 997;
 }
 
-/** Deterministic [0, 1) from event id; different salts → uncorrelated streams. */
 function hashFromId(id: string, salt: number): number {
-  let h = (salt + 0x6eed0e9d) >>> 0;
-  for (let i = 0; i < id.length; i++) {
-    h = Math.imul(h ^ id.charCodeAt(i), 0x1000193);
-  }
-  h ^= h >>> 15;
-  h = Math.imul(h, 0x735a2d97);
-  h ^= h >>> 15;
-  return (h >>> 0) / 0xffffffff;
+  let h = (salt + 0xdeadbeef) ^ seedFromId(id);
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-function wanderPhaseRad(id: string) {
-  const seed = seedFromId(id);
-  const h = hashFromId(id, 5);
-  return (phaseFromSeed(seed) * 0.35 + h * 0.65) * Math.PI * 2;
-}
-
-function wanderPosition(id: string, elapsedMs: number) {
-  const h0 = hashFromId(id, 0);
-  const h1 = hashFromId(id, 1);
-  const h2 = hashFromId(id, 2);
-  const h3 = hashFromId(id, 3);
-  const h4 = hashFromId(id, 4);
-
-  const phase = wanderPhaseRad(id);
-  const phaseY2 = h0 * Math.PI * 2;
-  const t = elapsedMs / 1000;
-
-  const travelSpeed = 0.011 + h1 * 0.024;
-  const travel = (t * travelSpeed + phase) % 2;
-  const sweep = travel < 1 ? travel : 2 - travel;
-  const range = WANDER_X_MAX - WANDER_X_MIN;
-  const movingRight = travel < 1;
-  const dSweepDt = movingRight ? travelSpeed : -travelSpeed;
-  let velocityX = range * dSweepDt;
-
-  const wobbleFreq = 0.075 + h3 * 0.16;
-  const wobbleAmp = 1.2 + h4 * 4;
-  const xWobble = Math.sin(t * wobbleFreq + phaseY2) * wobbleAmp;
-  velocityX += Math.cos(t * wobbleFreq + phaseY2) * wobbleAmp * wobbleFreq;
-
-  let x = WANDER_X_MIN + range * sweep + xWobble;
-  x = Math.min(WANDER_X_MAX + 6, Math.max(WANDER_X_MIN - 6, x));
-
-  const yFreq1 = 0.34 + h2 * 0.44;
-  const yFreq2 = 0.1 + h3 * 0.28;
-  const yAmp1 = 6 + h2 * 14;
-  const yAmp2 = 2.5 + h4 * 11;
-  const yCenter = 58 + (h1 - 0.5) * 18;
-  const yWave =
-    yCenter +
-    Math.sin(t * yFreq1 + phase) * yAmp1 +
-    Math.cos(t * yFreq2 + phaseY2 * 1.31) * yAmp2;
-  const y = Math.min(WANDER_Y_MAX, Math.max(WANDER_Y_MIN, yWave));
-
-  return { x, y, velocityX, phase };
-}
-
-const wanderAnchorTimeCache = new Map<string, number>();
-const ANCHOR_SEARCH_STEP_MS = 200;
-const ANCHOR_SEARCH_MAX_MS = 120_000;
-
-function wanderAnchorTimeMs(id: string, entryEndX: number, entryEndY: number): number {
-  const cached = wanderAnchorTimeCache.get(id);
-  if (cached !== undefined) return cached;
-
-  let bestT = 0;
-  let bestScore = Infinity;
-  for (let t = 0; t <= ANCHOR_SEARCH_MAX_MS; t += ANCHOR_SEARCH_STEP_MS) {
-    const p = wanderPosition(id, t);
-    const dx = p.x - entryEndX;
-    const dy = p.y - entryEndY;
-    const score = dx * dx + dy * dy * 0.35;
-    if (score < bestScore) {
-      bestScore = score;
-      bestT = t;
-    }
-  }
-  wanderAnchorTimeCache.set(id, bestT);
-  return bestT;
-}
-
-function wanderStagePosition(id: string, elapsedMs: number) {
-  const phase = wanderPhaseRad(id);
-
-  if (elapsedMs < ENTRY_MS) {
-    const progress = Math.max(0, elapsedMs) / ENTRY_MS;
-    const startX = -12;
-    const endX = 36;
-    const x = startX + (endX - startX) * progress;
-    const y = 58 + Math.sin(progress * Math.PI * 2 + phase) * 6;
-    return { x, y, facingRight: true };
-  }
-
-  if (elapsedMs < ENTRY_MS + WANDER_MS) {
-    const wanderElapsed = elapsedMs - ENTRY_MS;
-
-    if (wanderElapsed < ENTRY_BLEND_MS) {
-      const blendT = wanderElapsed / ENTRY_BLEND_MS;
-      const entryEndX = 36;
-      const entryEndY = 58 + Math.sin(Math.PI * 2 + phase) * 6;
-      const tAnchor = wanderAnchorTimeMs(id, entryEndX, entryEndY);
-      const wanderJoin = wanderPosition(id, tAnchor);
-      const blendX = entryEndX + (wanderJoin.x - entryEndX) * blendT;
-      const blendY = entryEndY + (wanderJoin.y - entryEndY) * blendT;
-      const dx = wanderJoin.x - entryEndX;
-      const facingRight =
-        Math.abs(dx) > 0.35 ? dx >= 0 : wanderJoin.velocityX >= 0;
-      return { x: blendX, y: blendY, facingRight };
-    }
-
-    const tAnchor = wanderAnchorTimeMs(
-      id,
-      36,
-      58 + Math.sin(Math.PI * 2 + phase) * 6,
-    );
-    const pathMs = wanderElapsed - ENTRY_BLEND_MS;
-    const wandered = wanderPosition(id, tAnchor + pathMs);
-    return {
-      x: wandered.x,
-      y: wandered.y,
-      facingRight: wandered.velocityX >= 0,
-    };
-  }
-
-  const exitElapsed = elapsedMs - (ENTRY_MS + WANDER_MS);
-  const progress = Math.min(1, exitElapsed / EXIT_MS);
-  const entryEndX = 36;
-  const entryEndY = 58 + Math.sin(Math.PI * 2 + phase) * 6;
-  const tAnchor = wanderAnchorTimeMs(id, entryEndX, entryEndY);
-  const exitStart = wanderPosition(id, tAnchor + WANDER_MS - ENTRY_BLEND_MS);
-  const exitX = 112;
-  const x = exitStart.x + (exitX - exitStart.x) * progress;
-  const y = exitStart.y + Math.cos(progress * Math.PI * 2 + phase * 0.3) * 2;
-  return { x, y, facingRight: true };
-}
-
-const optimisticChannelName = "goose-wander-optimistic";
+const SPONSORS = [
+  "baanmaikhow.png",
+  "bu.png",
+  "h-lab.jpg",
+  "pano_Industries.png",
+  "tgu.png",
+  "tik_screen.jpg"
+];
 
 export default function DisplayPage() {
-  const [gooseEvents, setGooseEvents] = useState<GooseRecord[]>([]);
-  const [now, setNow] = useState(0);
+  const [activeGooseEvents, setActiveGooseEvents] = useState<GooseRecord[]>([]);
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    let frameId = 0;
-    const tick = () => {
-      setNow(Date.now());
-      frameId = requestAnimationFrame(tick);
-    };
-    frameId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frameId);
-  }, []);
+    const ably = createAblyRealtimeClient();
+    const channel = ably.channels.get("goose-updates");
 
-  useEffect(() => {
-    const client = createAblyRealtimeClient();
-    const channel = client.channels.get("goose-wander");
-    let mounted = true;
-    let optimisticChannel: BroadcastChannel | null = null;
-
-    async function hydrate() {
-      const res = await fetch("/api/realtime", { cache: "no-store" });
-      const data = (await res.json()) as { events?: GooseRecord[] };
-      if (!mounted) return;
-      const recent = Array.isArray(data.events) ? data.events : [];
-      setGooseEvents(recent);
-    }
-
-    hydrate();
-
-    channel.subscribe("goose:new", (message) => {
-      const incoming = message.data as GooseRecord;
-      setGooseEvents((current) => {
-        const next = [incoming, ...current.filter((item) => item.id !== incoming.id)];
-        return next.slice(0, 40);
+    channel.subscribe("goose-event", (message) => {
+      const newGoose = message.data as GooseRecord;
+      setActiveGooseEvents((prev) => {
+        const filtered = prev.filter((g) => g.id !== newGoose.id);
+        return [...filtered, newGoose];
       });
     });
 
-    if (typeof window !== "undefined") {
-      if ("BroadcastChannel" in window) {
-        optimisticChannel = new BroadcastChannel(optimisticChannelName);
-        optimisticChannel.onmessage = (event) => {
-          const incoming = event.data as GooseRecord;
-          setGooseEvents((current) => {
-            const next = [incoming, ...current.filter((item) => item.id !== incoming.id)];
-            return next.slice(0, 40);
-          });
-        };
-      } else {
-        const win = window as Window;
-        const onStorage = (event: StorageEvent) => {
-          if (event.key !== optimisticChannelName || !event.newValue) return;
-          const incoming = JSON.parse(event.newValue) as GooseRecord;
-          setGooseEvents((current) => {
-            const next = [incoming, ...current.filter((item) => item.id !== incoming.id)];
-            return next.slice(0, 40);
-          });
-        };
-        win.addEventListener("storage", onStorage);
-        optimisticChannel = {
-          close() {
-            win.removeEventListener("storage", onStorage);
-          },
-        } as BroadcastChannel;
-      }
-    }
-
+    const timer = setInterval(() => setNow(Date.now()), 50);
     return () => {
-      mounted = false;
-      optimisticChannel?.close();
       channel.unsubscribe();
-      client.close();
+      clearInterval(timer);
     };
   }, []);
-
-  const activeGooseEvents = useMemo(
-    () =>
-      gooseEvents.filter((goose) => {
-        const elapsed = now - new Date(goose.created_at).getTime();
-        return elapsed >= 0 && elapsed < WANDER_TOTAL_MS;
-      }),
-    [gooseEvents, now]
-  );
 
   return (
     <main
@@ -262,12 +75,59 @@ export default function DisplayPage() {
         backgroundSize: "100% 100%",
       }}
     >
+      <div className="absolute top-0 left-0 z-50 w-full overflow-hidden mt-10">
+        <div className="flex animate-marquee-right whitespace-nowrap w-max">
+          {[...SPONSORS, ...SPONSORS].map((logo, i) => (
+            <div key={`${logo}-${i}`} className="mx-12 flex flex-col items-center gap-2">
+              <span className="text-[12px] font-bold tracking-[0.2em] text-black uppercase">
+                ผู้สนับสนุน
+              </span>
+              <img
+                src={`/sponser/${logo}`}
+                alt="Sponsor"
+                className="h-12 md:h-14 w-auto object-contain"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
       {activeGooseEvents
         .slice()
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
         .map((goose, index) => {
-          const elapsed = now - new Date(goose.created_at).getTime();
-          const position = wanderStagePosition(goose.id, elapsed);
+          const createdAt = new Date(goose.created_at).getTime();
+          const elapsed = now - createdAt;
+          if (elapsed < 0 || elapsed > WANDER_TOTAL_MS) return null;
+
+          const seed = seedFromId(goose.id);
+          const startX = hashFromId(goose.id, 1) < 0.5 ? -10 : 110;
+          const endX = startX < 0 ? 110 : -10;
+          const wanderX = WANDER_X_MIN + hashFromId(goose.id, 2) * (WANDER_X_MAX - WANDER_X_MIN);
+          const wanderY = WANDER_Y_MIN + hashFromId(goose.id, 3) * (WANDER_Y_MAX - WANDER_Y_MIN);
+
+          let position = { x: wanderX, y: wanderY, facingRight: true };
+
+          if (elapsed < ENTRY_MS) {
+            const p = elapsed / ENTRY_MS;
+            position.x = startX + (wanderX - startX) * p;
+            position.facingRight = wanderX > startX;
+          } else if (elapsed < ENTRY_MS + WANDER_MS) {
+            const wElapsed = elapsed - ENTRY_MS;
+            const ampX = 3 + hashFromId(goose.id, 4) * 4;
+            const ampY = 2 + hashFromId(goose.id, 5) * 3;
+            const freqX = 0.0005 + hashFromId(goose.id, 6) * 0.0005;
+            const freqY = 0.0007 + hashFromId(goose.id, 7) * 0.0005;
+
+            position.x = wanderX + Math.sin(wElapsed * freqX + phaseFromSeed(seed) * Math.PI * 2) * ampX;
+            position.y = wanderY + Math.cos(wElapsed * freqY + phaseFromSeed(seed + 1) * Math.PI * 2) * ampY;
+            position.facingRight = Math.cos(wElapsed * freqX + phaseFromSeed(seed) * Math.PI * 2) > 0;
+          } else {
+            const p = (elapsed - (ENTRY_MS + WANDER_MS)) / EXIT_MS;
+            position.x = wanderX + (endX - wanderX) * p;
+            position.facingRight = endX > wanderX;
+          }
+
           const frameIndex = Math.floor((elapsed / 260) % frameCount);
           const frameOffset = gooseKinds.indexOf(goose.goose_kind as (typeof gooseKinds)[number]) * frameCount;
           const frame = spriteFrames[Math.max(0, frameOffset) + frameIndex];
