@@ -34,7 +34,7 @@ export async function createGooseEvent(payload: GooseEventPayload) {
     throw new Error("Missing guest name");
   }
 
-  if (!isValidRating(payload.rating)) {
+  if (!isValidRating(payload.rating) && payload.rating !== 0) {
     throw new Error("Invalid rating");
   }
 
@@ -67,6 +67,34 @@ export async function createGooseEvent(payload: GooseEventPayload) {
   }
 
   await ablyRest.channels.get(channelName).publish("goose:new", data);
+
+  return data;
+}
+
+export async function updateGooseEvent(id: string, payload: { rating: number; comment?: string | null }) {
+  if (!id) {
+    throw new Error("Missing event ID");
+  }
+
+  if (!isValidRating(payload.rating)) {
+    throw new Error("Invalid rating");
+  }
+
+  const updateData = {
+    rating: payload.rating,
+    comment: normalizeComment(payload.comment),
+  };
+
+  const { data, error } = await supabaseAdmin
+    .from(tableName)
+    .update(updateData)
+    .eq("id", id)
+    .select("id, goose_kind, guest_name, rating, comment, created_at")
+    .single<GooseRecord>();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Failed to update goose event");
+  }
 
   return data;
 }

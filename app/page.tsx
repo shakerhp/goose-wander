@@ -146,9 +146,7 @@ const optimisticChannelName = "goose-wander-optimistic";
 
 function broadcastOptimisticGoose(event: { id: string; goose_kind: GooseKind; guest_name: string; rating: number; comment: string | null; created_at: string }) {
   if (typeof window === "undefined") return;
-
   const payload = JSON.stringify(event);
-
   try {
     if ("BroadcastChannel" in window) {
       const channel = new BroadcastChannel(optimisticChannelName);
@@ -156,18 +154,15 @@ function broadcastOptimisticGoose(event: { id: string; goose_kind: GooseKind; gu
       channel.close();
       return;
     }
-  } catch {
-  }
-
+  } catch { }
   try {
     window.localStorage.setItem(optimisticChannelName, payload);
     window.localStorage.removeItem(optimisticChannelName);
-  } catch {
-  }
+  } catch { }
 }
 
 export default function Home() {
-  const [step, setStep] = useState<"details" | "goose" | "thanks">("details");
+  const [step, setStep] = useState<"details" | "goose" | "thanks" | "success">("details");
   const [selected, setSelected] = useState<GooseKind>("original");
   const [guestName, setGuestName] = useState("");
   const [comment, setComment] = useState("");
@@ -176,42 +171,76 @@ export default function Home() {
   const [nameMessage, setNameMessage] = useState("");
   const [ratingMessage, setRatingMessage] = useState("");
 
+  // สร้าง State สำหรับเก็บ ID ของเรคคอร์ดที่ถูกสร้างขึ้นใน Step 2
+  const [eventId, setEventId] = useState<string | null>(null);
+
+  // Step 1 -> Step 2
   function goNextStep() {
     const nextNameMessage = !guestName.trim() ? "กรุณากรอกชื่อ" : "";
-    const nextRatingMessage = rating < 1 ? "กรุณาให้คะแนน" : "";
-
     setNameMessage(nextNameMessage);
-    setRatingMessage(nextRatingMessage);
 
-    if (nextNameMessage || nextRatingMessage) {
-      return;
-    }
+    if (nextNameMessage) return;
 
     setStep("goose");
   }
 
-  async function sendGoose(kind: GooseKind) {
-    if (!guestName.trim()) {
-      setNameMessage("กรุณากรอกชื่อก่อนส่ง");
-      setStep("details");
-      return;
-    }
-    if (rating < 1) {
-      setRatingMessage("กรุณาให้คะแนนก่อนส่ง");
-      setStep("details");
-      return;
-    }
-
+  // Step 2 -> Step 3 (บันทึกข้อมูลเบื้องต้นลง DB + ส่งจอทันที)
+  async function createRealGooseData() {
     setSending(true);
-    setNameMessage("");
-    setRatingMessage("");
     try {
+      // ยิง POST เพื่อสร้างเรคคอร์ดใหม่ (โดยยังไม่มีการให้ดาว)
       const response = await fetch("/api/goose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          goose: kind,
+          goose: selected,
           guestName: guestName.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        throw new Error(error?.error ?? "ไม่สามารถส่งห่านได้");
+      }
+
+      const result = await response.json();
+
+      // เก็บ ID ของข้อมูลที่เพิ่งสร้างไว้ใช้อัปเดตทีหลัง
+      setEventId(result.event.id);
+
+      // ดันข้อมูลที่เซฟจริงไปให้หน้าจอ Display แสดงผล
+      broadcastOptimisticGoose(result.event);
+
+      // เปลี่ยนหน้าไปที่ Step ถัดไป
+      setStep("thanks");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "เกิดข้อผิดพลาด");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  // Step 3 -> บันทึกการอัปเดต (คะแนน & คอมเมนต์) ลง DB
+  async function submitFeedback() {
+    if (rating < 1) {
+      setRatingMessage("กรุณาให้คะแนนก่อนยืนยัน");
+      return;
+    }
+
+    if (!eventId) {
+      setRatingMessage("เกิดข้อผิดพลาด ไม่พบข้อมูลห่านที่ส่งไปแล้ว");
+      return;
+    }
+
+    setSending(true);
+    setRatingMessage("");
+    try {
+      // ยิง PATCH เพื่ออัปเดตเรคคอร์ดเดิมที่ได้ ID มา
+      const response = await fetch("/api/goose", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: eventId,
           rating,
           comment: comment.trim() || null,
         }),
@@ -222,59 +251,46 @@ export default function Home() {
         throw new Error(error?.error ?? "บันทึกไม่สำเร็จ");
       }
 
-      const result = await response.json();
-      broadcastOptimisticGoose(result.event);
-      setNameMessage(`บันทึกชื่อ ${result.event.guest_name} เรียบร้อยแล้ว`);
-      setRatingMessage(`ให้คะแนน ${result.event.rating} ดาวเรียบร้อยแล้ว`);
-      setGuestName("");
-      setComment("");
-      setRating(0);
-      setStep("thanks");
-      setSelected("original");
+      resetForm();
+      setStep("success");
     } catch (error) {
-      setNameMessage(error instanceof Error ? error.message : "บันทึกไม่สำเร็จ");
+      setRatingMessage(error instanceof Error ? error.message : "บันทึกไม่สำเร็จ");
     } finally {
       setSending(false);
     }
   }
 
+  function resetForm() {
+    setGuestName("");
+    setComment("");
+    setRating(0);
+    setSelected("original");
+    setEventId(null);
+  }
+
+  function handleSkipFeedback() {
+    resetForm();
+    setStep("details");
+  }
+
   return (
     <main className="min-h-screen bg-black text-zinc-100">
       <section
-        className={`mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-10 px-6 lg:px-10 ${step === "details" ? "justify-center py-6" : "py-10"
+        className={`mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-10 px-6 lg:px-10 ${step === "details" || step === "thanks" || step === "success" ? "justify-center py-6" : "py-10"
           }`}
       >
-        {step === "thanks" ? (
-          <div className="flex min-h-[70vh] w-full items-center justify-center">
+        {step === "success" ? (
+          <div className="flex min-h-[70vh] w-full flex-col items-center justify-center gap-6">
             <div className="text-center">
-              <p className="text-3xl font-medium text-zinc-100">ขอบคุณที่ร่วมสนุก</p>
+              <p className="text-3xl font-medium text-zinc-100">บันทึกข้อมูลเรียบร้อย</p>
             </div>
           </div>
-        ) : step === "details" ? (
-          <div className="mx-auto w-full max-w-2xl rounded-3xl border border-white/10 bg-zinc-950/80 p-4 shadow-2xl shadow-black/30">
-            <div className="space-y-6">
-              <div className="flex justify-center">
-                <img
-                  src="/logo.png"
-                  alt="Goose Wander Logo"
-                  className="h-52 w-auto object-contain"
-                />
-              </div>
-
-              <div className="space-y-2 text-left">
-                <div className="flex items-center gap-3">
-                  <span className="text-lg font-medium text-zinc-200">ชื่อของคุณ</span>
-                  {nameMessage ? <p className="text-sm text-red-400">{nameMessage}</p> : null}
-                </div>
-                <input
-                  value={guestName}
-                  onChange={(event) => {
-                    setGuestName(event.target.value);
-                    if (nameMessage) setNameMessage("");
-                  }}
-                  placeholder="กรอกชื่อที่นี่"
-                  className="mt-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-zinc-500 focus:border-yellow-400/60 focus:bg-white/10"
-                />
+        ) : step === "thanks" ? (
+          <div className="mx-auto w-full max-w-2xl rounded-3xl border border-white/10 bg-zinc-950/80 p-8 shadow-2xl shadow-black/30">
+            <div className="space-y-8">
+              <div className="text-center">
+                <p className="text-3xl font-medium text-zinc-100">ห่านของคุณแสดงแล้ว!</p>
+                <p className="mt-2 text-zinc-400">ฝากให้คะแนนและคำแนะนำกับเราหน่อยนะ</p>
               </div>
 
               <div className="space-y-2 text-left">
@@ -314,10 +330,49 @@ export default function Home() {
                   value={comment}
                   onChange={(event) => setComment(event.target.value)}
                   placeholder="พิมพ์ความคิดเห็นเพิ่มเติมได้ที่นี่"
-                  rows={3}
+                  rows={4}
                   className="mt-4 w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-zinc-500 focus:border-yellow-400/60 focus:bg-white/10"
                 />
               </label>
+
+              <div className="flex flex-col gap-3">
+                <button
+                  type="button"
+                  onClick={submitFeedback}
+                  disabled={sending}
+                  className="w-full rounded-full border border-yellow-400/30 bg-yellow-400/10 px-6 py-3 text-lg font-medium text-yellow-200 transition hover:bg-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {sending ? "กำลังบันทึก..." : "ยืนยัน"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : step === "details" ? (
+          <div className="mx-auto w-full max-w-2xl rounded-3xl border border-white/10 bg-zinc-950/80 p-4 shadow-2xl shadow-black/30">
+            <div className="space-y-6">
+              <div className="flex justify-center">
+                <img
+                  src="/logo.png"
+                  alt="Goose Wander Logo"
+                  className="h-52 w-auto object-contain"
+                />
+              </div>
+
+              <div className="space-y-2 text-left">
+                <div className="flex items-center gap-3">
+                  <span className="text-lg font-medium text-zinc-200">ชื่อของคุณ</span>
+                  {nameMessage ? <p className="text-sm text-red-400">{nameMessage}</p> : null}
+                </div>
+                <input
+                  value={guestName}
+                  onChange={(event) => {
+                    setGuestName(event.target.value);
+                    if (nameMessage) setNameMessage("");
+                  }}
+                  placeholder="กรอกชื่อที่นี่"
+                  className="mt-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-zinc-500 focus:border-yellow-400/60 focus:bg-white/10"
+                />
+              </div>
 
               <button
                 type="button"
@@ -365,7 +420,8 @@ export default function Home() {
                         onClick={() => setSelected(goose.id)}
                         title={`${goose.name} - ${goose.title}`}
                         aria-describedby={isActive ? `goose-tooltip-${goose.id}` : undefined}
-                        className={`group h-full w-full overflow-hidden rounded-3xl border bg-zinc-950/80 text-center transition hover:-translate-y-1 hover:bg-zinc-900 ${isActive ? "border-yellow-400/60" : "border-white/10"}`}
+                        className={`group h-full w-full overflow-hidden rounded-3xl border bg-zinc-950/80 text-center transition hover:-translate-y-1 hover:bg-zinc-900 ${isActive ? "border-yellow-400/60" : "border-white/10"
+                          }`}
                       >
                         <div className="aspect-square overflow-hidden bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.15),transparent_60%)] p-2 sm:p-3">
                           <div
@@ -380,14 +436,24 @@ export default function Home() {
                       </button>
 
                       {isActive ? (
-                        <div className={`absolute ${popupPosition} z-20 w-[min(228px,calc(100vw-2rem))] ${mobilePosition} ${desktopPosition}`}>
+                        <div
+                          className={`absolute ${popupPosition} z-20 w-[min(228px,calc(100vw-2rem))] ${mobilePosition} ${desktopPosition}`}
+                        >
                           <div className="goose-popup-panel relative rounded-xl border border-yellow-400/20 bg-black/90 p-2.5 text-left text-[11px] leading-snug text-zinc-200 shadow-lg shadow-black/40 backdrop-blur-sm">
-                            <div className={`absolute h-3 w-3 rotate-45 border-l border-t border-yellow-400/20 bg-black/90 ${arrowPosition}`} />
-                            <p className="text-[11px] font-medium leading-snug text-yellow-200">{goose.title}</p>
+                            <div
+                              className={`absolute h-3 w-3 rotate-45 border-l border-t border-yellow-400/20 bg-black/90 ${arrowPosition}`}
+                            />
+                            <p className="text-[11px] font-medium leading-snug text-yellow-200">
+                              {goose.title}
+                            </p>
                             {goose.description ? (
                               <GooseDescription gooseId={goose.id} text={goose.description} />
                             ) : null}
-                            {goose.role ? <p className="mt-1.5 text-[10px] leading-snug text-zinc-500">{goose.role}</p> : null}
+                            {goose.role ? (
+                              <p className="mt-1.5 text-[10px] leading-snug text-zinc-500">
+                                {goose.role}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       ) : null}
@@ -399,17 +465,18 @@ export default function Home() {
               <div className="mx-auto flex w-full max-w-xl flex-col gap-4 rounded-3xl border border-white/10 bg-zinc-950/80 p-4 shadow-2xl shadow-black/30">
                 <button
                   type="button"
+                  onClick={createRealGooseData}
                   disabled={sending}
-                  onClick={() => sendGoose(selected)}
                   className="w-full rounded-full border border-yellow-400/30 bg-yellow-400/10 px-6 py-3 text-lg font-medium text-yellow-200 transition hover:bg-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {sending ? "กำลังส่ง..." : "ส่งห่าน"}
+                  {sending ? "กำลังส่งห่าน..." : "ส่งห่าน"}
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setStep("details")}
-                  className="w-full rounded-full border border-white/10 bg-white/5 px-6 py-3 text-lg font-medium text-zinc-200 transition hover:bg-white/10"
+                  disabled={sending}
+                  className="w-full rounded-full border border-white/10 bg-white/5 px-6 py-3 text-lg font-medium text-zinc-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   ย้อนกลับ
                 </button>
