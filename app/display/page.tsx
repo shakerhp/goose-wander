@@ -11,7 +11,7 @@ const spriteFrames = gooseKinds.flatMap((kind) =>
 );
 
 const ENTRY_MS = 6_000;
-const WANDER_MS = 5 * 60 * 1_000;
+const WANDER_MS = 10 * 60 * 1_000;
 const EXIT_MS = 7_500;
 const ENTRY_BLEND_MS = 2_800;
 const WANDER_TOTAL_MS = ENTRY_MS + WANDER_MS + EXIT_MS;
@@ -57,42 +57,40 @@ function wanderPhaseRad(id: string) {
 }
 
 function wanderPosition(id: string, elapsedMs: number) {
-  const h0 = hashFromId(id, 0);
   const h1 = hashFromId(id, 1);
   const h2 = hashFromId(id, 2);
   const h3 = hashFromId(id, 3);
   const h4 = hashFromId(id, 4);
 
   const phase = wanderPhaseRad(id);
-  const phaseY2 = h0 * Math.PI * 2;
   const t = elapsedMs / 1000;
 
-  const travelSpeed = 0.011 + h1 * 0.024;
-  const travel = (t * travelSpeed + phase) % 2;
-  const sweep = travel < 1 ? travel : 2 - travel;
-  const range = WANDER_X_MAX - WANDER_X_MIN;
-  const movingRight = travel < 1;
-  const dSweepDt = movingRight ? travelSpeed : -travelSpeed;
-  let velocityX = range * dSweepDt;
+  // --- ปรับให้เดินช้าลง (ลดตัวคูณความถี่ลง) ---
+  const baseFreqX = 0.08 + h1 * 0.05; // ลดลงเพื่อให้เดินซ้ายขวาช้าขึ้น
+  const secondaryFreqX = 0.03 + h2 * 0.03;
 
-  const wobbleFreq = 0.075 + h3 * 0.16;
-  const wobbleAmp = 1.2 + h4 * 4;
-  const xWobble = Math.sin(t * wobbleFreq + phaseY2) * wobbleAmp;
-  velocityX += Math.cos(t * wobbleFreq + phaseY2) * wobbleAmp * wobbleFreq;
+  const xMovement = Math.sin(t * baseFreqX + phase) * 0.7 + Math.cos(t * secondaryFreqX + phase * 0.5) * 0.3;
+  const rangeX = WANDER_X_MAX - WANDER_X_MIN;
+  const centerX = WANDER_X_MIN + rangeX / 2;
 
-  let x = WANDER_X_MIN + range * sweep + xWobble;
-  x = Math.min(WANDER_X_MAX + 6, Math.max(WANDER_X_MIN - 6, x));
+  // คำนวณทิศทางการหันหน้า
+  const velocityX = Math.cos(t * baseFreqX + phase) * baseFreqX * 0.7 - Math.sin(t * secondaryFreqX + phase * 0.5) * secondaryFreqX * 0.3;
 
-  const yFreq1 = 0.34 + h2 * 0.44;
-  const yFreq2 = 0.1 + h3 * 0.28;
-  const yAmp1 = 6 + h2 * 14;
-  const yAmp2 = 2.5 + h4 * 11;
-  const yCenter = 58 + (h1 - 0.5) * 18;
-  const yWave =
-    yCenter +
-    Math.sin(t * yFreq1 + phase) * yAmp1 +
-    Math.cos(t * yFreq2 + phaseY2 * 1.31) * yAmp2;
-  const y = Math.min(WANDER_Y_MAX, Math.max(WANDER_Y_MIN, yWave));
+  // เดินเตาะแตะ (Wobble) ให้ช้าลงด้วย
+  const xWobble = Math.sin(t * 2 + phase) * 0.4;
+  let x = centerX + (xMovement * (rangeX / 2)) + xWobble;
+
+  // --- ปรับการเดินขึ้นลง (แกน Y) ให้ช้าลง ---
+  const baseFreqY = 0.1 + h3 * 0.08;
+  const secondaryFreqY = 0.04 + h4 * 0.05;
+  const yMovement = Math.sin(t * baseFreqY + phase * 1.5) * 0.6 + Math.sin(t * secondaryFreqY + phase * 0.8) * 0.4;
+
+  const rangeY = WANDER_Y_MAX - WANDER_Y_MIN;
+  const centerY = WANDER_Y_MIN + rangeY / 2;
+  let y = centerY + (yMovement * (rangeY / 2));
+
+  x = Math.max(WANDER_X_MIN, Math.min(WANDER_X_MAX, x));
+  y = Math.max(WANDER_Y_MIN, Math.min(WANDER_Y_MAX, y));
 
   return { x, y, velocityX, phase };
 }
