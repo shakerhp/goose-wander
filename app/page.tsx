@@ -286,11 +286,11 @@ export default function Home() {
             </div>
           </div>
         ) : step === "thanks" ? (
-          <div className="mx-auto w-full max-w-2xl rounded-3xl border border-white/10 bg-zinc-950/80 p-8 shadow-2xl shadow-black/30">
+          <div className="mx-auto w-full max-w-2xl rounded-3xl border border-white/10 bg-zinc-950/80 p-6 shadow-2xl shadow-black/30">
             <div className="space-y-8">
               <div className="text-center">
                 <p className="text-3xl font-medium text-zinc-100">ห่านของคุณแสดงแล้ว!</p>
-                <p className="mt-2 text-zinc-400">ฝากให้คะแนนและคำแนะนำกับเราหน่อยนะ</p>
+                <p className="mt-2 text-zinc-400">กรุณาให้ความพึงพอใจและคำแนะนำ</p>
               </div>
 
               <div className="space-y-2 text-left">

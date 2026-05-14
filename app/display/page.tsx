@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createAblyRealtimeClient } from "@/lib/ably-client";
 import { type GooseRecord } from "@/lib/goose";
+import Marquee from "react-fast-marquee";
 
 const frameCount = 4;
 const gooseKinds = ["original", "media", "tradesman", "nerd", "paint", "robot"] as const;
@@ -19,7 +20,7 @@ const WANDER_TOTAL_MS = ENTRY_MS + WANDER_MS + EXIT_MS;
 const WANDER_X_MIN = 6;
 const WANDER_X_MAX = 94;
 const WANDER_Y_MIN = 47;
-const WANDER_Y_MAX = 96;
+const WANDER_Y_MAX = 75;
 
 // รายชื่อรูปภาพผู้สนับสนุน
 const SPONSORS = [
@@ -268,10 +269,14 @@ export default function DisplayPage() {
         backgroundSize: "100% 100%",
       }}
     >
-      <div className="absolute top-0 left-0 z-50 w-full overflow-hidden mt-8">
-        <div className="flex animate-marquee-right whitespace-nowrap w-max">
-          {[...SPONSORS, ...SPONSORS].map((logo, i) => (
-            <div key={`${logo}-${i}`} className="inline-flex flex-col items-center gap-2 px-12">
+      <div className="absolute top-0 left-0 z-50 w-full mt-8">
+        <Marquee
+          gradient={false}
+          speed={50}
+          direction="right"
+        >
+          {[...SPONSORS, ...SPONSORS, ...SPONSORS, ...SPONSORS].map((logo, i) => (
+            <div key={`${logo}-${i}`} className="flex flex-col items-center gap-2 px-12">
               <span className="text-[24px] font-bold tracking-[0.2em] text-black uppercase">
                 ผู้สนับสนุน
               </span>
@@ -282,7 +287,7 @@ export default function DisplayPage() {
               />
             </div>
           ))}
-        </div>
+        </Marquee>
       </div>
 
       {activeGooseEvents
