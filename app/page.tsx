@@ -212,7 +212,8 @@ export default function Home() {
       broadcastOptimisticGoose(result.event);
 
       // เปลี่ยนหน้าไปที่ Step ถัดไป
-      setStep("thanks");
+      // setStep("thanks");
+      setStep("success");
     } catch (error) {
       alert(error instanceof Error ? error.message : "เกิดข้อผิดพลาด");
     } finally {
@@ -285,68 +286,68 @@ export default function Home() {
               <p className="text-3xl font-medium text-zinc-100">บันทึกข้อมูลเรียบร้อย</p>
             </div>
           </div>
-        ) : step === "thanks" ? (
-          <div className="mx-auto w-full max-w-2xl rounded-3xl border border-white/10 bg-zinc-950/80 p-6 shadow-2xl shadow-black/30">
-            <div className="space-y-8">
-              <div className="text-center">
-                <p className="text-3xl font-medium text-zinc-100">ห่านของคุณแสดงแล้ว!</p>
-                <p className="mt-2 text-zinc-400">กรุณาให้ความพึงพอใจและคำแนะนำ</p>
-              </div>
+        // ) : step === "thanks" ? (
+        //   <div className="mx-auto w-full max-w-2xl rounded-3xl border border-white/10 bg-zinc-950/80 p-6 shadow-2xl shadow-black/30">
+        //     <div className="space-y-8">
+        //       <div className="text-center">
+        //         <p className="text-3xl font-medium text-zinc-100">ห่านของคุณแสดงแล้ว!</p>
+        //         <p className="mt-2 text-zinc-400">กรุณาให้ความพึงพอใจและคำแนะนำ</p>
+        //       </div>
 
-              <div className="space-y-2 text-left">
-                <div className="flex items-center gap-3">
-                  <span className="block text-lg font-medium text-zinc-200">ความพึงพอใจ</span>
-                  {ratingMessage ? <p className="text-sm text-red-400">{ratingMessage}</p> : null}
-                </div>
-                <div className="rating mt-3 flex items-center justify-center gap-2">
-                  {starOptions.map((star) => (
-                    <div key={star} className="relative">
-                      <input
-                        type="radio"
-                        id={`star${star}`}
-                        name="rate"
-                        value={star}
-                        checked={rating === star}
-                        onChange={() => {
-                          setRating(star);
-                          if (ratingMessage) setRatingMessage("");
-                        }}
-                        className="peer absolute h-0 w-0 opacity-0"
-                      />
-                      <label
-                        htmlFor={`star${star}`}
-                        className="cursor-pointer p-1.5 text-4xl transition-transform duration-150 hover:scale-110 peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-yellow-400/60 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-black"
-                      >
-                        <StarIcon filled={rating >= star} />
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
+        //       <div className="space-y-2 text-left">
+        //         <div className="flex items-center gap-3">
+        //           <span className="block text-lg font-medium text-zinc-200">ความพึงพอใจ</span>
+        //           {ratingMessage ? <p className="text-sm text-red-400">{ratingMessage}</p> : null}
+        //         </div>
+        //         <div className="rating mt-3 flex items-center justify-center gap-2">
+        //           {starOptions.map((star) => (
+        //             <div key={star} className="relative">
+        //               <input
+        //                 type="radio"
+        //                 id={`star${star}`}
+        //                 name="rate"
+        //                 value={star}
+        //                 checked={rating === star}
+        //                 onChange={() => {
+        //                   setRating(star);
+        //                   if (ratingMessage) setRatingMessage("");
+        //                 }}
+        //                 className="peer absolute h-0 w-0 opacity-0"
+        //               />
+        //               <label
+        //                 htmlFor={`star${star}`}
+        //                 className="cursor-pointer p-1.5 text-4xl transition-transform duration-150 hover:scale-110 peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-yellow-400/60 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-black"
+        //               >
+        //                 <StarIcon filled={rating >= star} />
+        //               </label>
+        //             </div>
+        //           ))}
+        //         </div>
+        //       </div>
 
-              <label className="block text-left">
-                <span className="text-lg font-medium text-zinc-200">ความคิดเห็น (ไม่บังคับ)</span>
-                <textarea
-                  value={comment}
-                  onChange={(event) => setComment(event.target.value)}
-                  placeholder="พิมพ์ความคิดเห็นเพิ่มเติมได้ที่นี่"
-                  rows={4}
-                  className="mt-4 w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-zinc-500 focus:border-yellow-400/60 focus:bg-white/10"
-                />
-              </label>
+        //       <label className="block text-left">
+        //         <span className="text-lg font-medium text-zinc-200">ความคิดเห็น (ไม่บังคับ)</span>
+        //         <textarea
+        //           value={comment}
+        //           onChange={(event) => setComment(event.target.value)}
+        //           placeholder="พิมพ์ความคิดเห็นเพิ่มเติมได้ที่นี่"
+        //           rows={4}
+        //           className="mt-4 w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-zinc-500 focus:border-yellow-400/60 focus:bg-white/10"
+        //         />
+        //       </label>
 
-              <div className="flex flex-col gap-3">
-                <button
-                  type="button"
-                  onClick={submitFeedback}
-                  disabled={sending}
-                  className="w-full rounded-full border border-yellow-400/30 bg-yellow-400/10 px-6 py-3 text-lg font-medium text-yellow-200 transition hover:bg-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {sending ? "กำลังบันทึก..." : "ยืนยัน"}
-                </button>
-              </div>
-            </div>
-          </div>
+        //       <div className="flex flex-col gap-3">
+        //         <button
+        //           type="button"
+        //           onClick={submitFeedback}
+        //           disabled={sending}
+        //           className="w-full rounded-full border border-yellow-400/30 bg-yellow-400/10 px-6 py-3 text-lg font-medium text-yellow-200 transition hover:bg-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+        //         >
+        //           {sending ? "กำลังบันทึก..." : "ยืนยัน"}
+        //         </button>
+        //       </div>
+        //     </div>
+        //   </div>
         ) : step === "details" ? (
           <div className="mx-auto w-full max-w-2xl rounded-3xl border border-white/10 bg-zinc-950/80 p-4 shadow-2xl shadow-black/30">
             <div className="space-y-6">
