@@ -32,6 +32,15 @@ const SPONSORS = [
   "tik_screen.jpg"
 ];
 
+function formatGuestLabel(goose: GooseRecord) {
+  const name = goose.guest_name?.trim() || "Anonymous";
+  const eggs = goose.egg_count;
+  if (typeof eggs === "number" && eggs >= 1 && eggs <= 5) {
+    return `${name} (${eggs})`;
+  }
+  return name;
+}
+
 function seedFromId(id: string) {
   return id.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
 }
@@ -307,7 +316,7 @@ export default function DisplayPage() {
             >
               <div className="flex flex-col items-center gap-1">
                 <div className="rounded-full border border-white/10 bg-blue-400 px-3 py-1 text-center text-sm font-medium text-white shadow-lg shadow-black/30 backdrop-blur">
-                  {goose.guest_name?.trim() || "Anonymous"}
+                  {formatGuestLabel(goose)}
                 </div>
                 <img
                   src={frame}

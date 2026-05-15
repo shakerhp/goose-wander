@@ -70,7 +70,9 @@ const geese: Array<GooseInfo> = [
 ];
 
 const starOptions = [1, 2, 3, 4, 5] as const;
+const eggOptions = [1, 2, 3, 4, 5] as const;
 type RatingValue = (typeof starOptions)[number] | 0;
+type EggCountValue = (typeof eggOptions)[number] | 0;
 
 function StarIcon({ filled }: { filled: boolean }) {
   return (
@@ -144,7 +146,15 @@ function GooseDescription({ text, gooseId }: { text: string; gooseId: GooseKind 
 
 const optimisticChannelName = "goose-wander-optimistic";
 
-function broadcastOptimisticGoose(event: { id: string; goose_kind: GooseKind; guest_name: string; rating: number; comment: string | null; created_at: string }) {
+function broadcastOptimisticGoose(event: {
+  id: string;
+  goose_kind: GooseKind;
+  guest_name: string;
+  egg_count: number | null;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+}) {
   if (typeof window === "undefined") return;
   const payload = JSON.stringify(event);
   try {
@@ -165,10 +175,12 @@ export default function Home() {
   const [step, setStep] = useState<"details" | "goose" | "thanks" | "success">("details");
   const [selected, setSelected] = useState<GooseKind>("original");
   const [guestName, setGuestName] = useState("");
+  const [eggCount, setEggCount] = useState<EggCountValue>(0);
   const [comment, setComment] = useState("");
   const [rating, setRating] = useState<RatingValue>(0);
   const [sending, setSending] = useState(false);
   const [nameMessage, setNameMessage] = useState("");
+  const [eggMessage, setEggMessage] = useState("");
   const [ratingMessage, setRatingMessage] = useState("");
 
   // สร้าง State สำหรับเก็บ ID ของเรคคอร์ดที่ถูกสร้างขึ้นใน Step 2
@@ -187,6 +199,8 @@ export default function Home() {
   // Step 2 -> Step 3 (บันทึกข้อมูลเบื้องต้นลง DB + ส่งจอทันที)
   async function createRealGooseData() {
     setSending(true);
+    setEggCount(0);
+    setEggMessage("");
     try {
       // ยิง POST เพื่อสร้างเรคคอร์ดใหม่ (โดยยังไม่มีการให้ดาว)
       const response = await fetch("/api/goose", {
@@ -195,6 +209,7 @@ export default function Home() {
         body: JSON.stringify({
           goose: selected,
           guestName: guestName.trim(),
+          eggCount: 0,
         }),
       });
 
@@ -263,10 +278,53 @@ export default function Home() {
 
   function resetForm() {
     setGuestName("");
+    setEggCount(0);
     setComment("");
     setRating(0);
     setSelected("original");
     setEventId(null);
+    setNameMessage("");
+    setEggMessage("");
+  }
+
+  async function submitEggCount() {
+    if (eggCount < 1) {
+      setEggMessage("กรุณาเลือกจำนวนไข่");
+      return;
+    }
+
+    if (!eventId) {
+      setEggMessage("เกิดข้อผิดพลาด ไม่พบข้อมูลห่านที่ส่งไปแล้ว");
+      return;
+    }
+
+    setSending(true);
+    setEggMessage("");
+    try {
+      const response = await fetch("/api/goose", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: eventId,
+          eggCount,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        throw new Error(error?.error ?? "บันทึกไม่สำเร็จ");
+      }
+
+      const result = await response.json();
+      broadcastOptimisticGoose(result.event);
+
+      resetForm();
+      setStep("details");
+    } catch (error) {
+      setEggMessage(error instanceof Error ? error.message : "บันทึกไม่สำเร็จ");
+    } finally {
+      setSending(false);
+    }
   }
 
   function handleSkipFeedback() {
@@ -281,9 +339,52 @@ export default function Home() {
           }`}
       >
         {step === "success" ? (
-          <div className="flex min-h-[70vh] w-full flex-col items-center justify-center gap-6">
-            <div className="text-center">
-              <p className="text-3xl font-medium text-zinc-100">บันทึกข้อมูลเรียบร้อย</p>
+          <div className="mx-auto w-full max-w-2xl rounded-3xl border border-white/10 bg-zinc-950/80 p-6 shadow-2xl shadow-black/30">
+            <div className="space-y-6">
+              <div className="text-center">
+                <p className="text-3xl font-medium text-zinc-100">บันทึกข้อมูลเรียบร้อย</p>
+                <p className="mt-2 text-zinc-400">ห่านของคุณแสดงบนจอแล้ว</p>
+              </div>
+
+              <div className="space-y-2 text-left">
+                <div className="flex items-center gap-3">
+                  <span className="text-lg font-medium text-zinc-200">คุณเจอไข่กี่ฟอง</span>
+                  {eggMessage ? <p className="text-sm text-red-400">{eggMessage}</p> : null}
+                </div>
+                <div className="mt-4 flex justify-center gap-2 sm:gap-3">
+                  {eggOptions.map((count) => {
+                    const isSelected = eggCount === count;
+                    return (
+                      <button
+                        key={count}
+                        type="button"
+                        onClick={() => {
+                          setEggCount(count);
+                          if (eggMessage) setEggMessage("");
+                        }}
+                        aria-pressed={isSelected}
+                        disabled={sending}
+                        className={`flex h-12 w-12 items-center justify-center rounded-2xl border text-lg font-semibold transition sm:h-14 sm:w-14 sm:text-xl disabled:cursor-not-allowed disabled:opacity-60 ${
+                          isSelected
+                            ? "border-yellow-400/60 bg-yellow-400/20 text-yellow-200"
+                            : "border-white/10 bg-white/5 text-zinc-200 hover:border-yellow-400/30 hover:bg-yellow-400/10"
+                        }`}
+                      >
+                        {count}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={submitEggCount}
+                disabled={sending}
+                className="w-full rounded-full border border-yellow-400/30 bg-yellow-400/10 px-6 py-3 text-lg font-medium text-yellow-200 transition hover:bg-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {sending ? "กำลังบันทึก..." : "ยืนยัน"}
+              </button>
             </div>
           </div>
         // ) : step === "thanks" ? (
