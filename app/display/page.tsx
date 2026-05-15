@@ -12,7 +12,7 @@ const spriteFrames = gooseKinds.flatMap((kind) =>
 );
 
 const ENTRY_MS = 6_000;
-const WANDER_MS = 10 * 60 * 1_000;
+const WANDER_MS = 60 * 60 * 1_000;
 const EXIT_MS = 7_500;
 const ENTRY_BLEND_MS = 2_800;
 const WANDER_TOTAL_MS = ENTRY_MS + WANDER_MS + EXIT_MS;
@@ -277,9 +277,6 @@ export default function DisplayPage() {
         >
           {[...SPONSORS, ...SPONSORS, ...SPONSORS, ...SPONSORS].map((logo, i) => (
             <div key={`${logo}-${i}`} className="flex flex-col items-center gap-2 px-12">
-              <span className="text-[24px] font-bold tracking-[0.2em] text-black uppercase">
-                ผู้สนับสนุน
-              </span>
               <img
                 src={`/sponser/${logo}`}
                 alt="Sponsor"
