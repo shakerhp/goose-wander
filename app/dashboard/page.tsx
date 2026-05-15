@@ -9,7 +9,7 @@ const labels: Record<keyof GooseDashboardStats["selections"], string> = {
   nerd: "สายสื่อสาร",
   paint: "สายอาทติส",
   robot: "สายหุ่นยนต์",
-  original: "สายตลอด",
+  original: "สายอิสระ",
 };
 
 const satisfactionLabels: Record<1 | 2 | 3 | 4 | 5, string> = {
