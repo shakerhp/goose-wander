@@ -69,27 +69,10 @@ const geese: Array<GooseInfo> = [
   },
 ];
 
-const starOptions = [1, 2, 3, 4, 5] as const;
 const eggOptions = [1, 2, 3, 4, 5] as const;
-type RatingValue = (typeof starOptions)[number] | 0;
 type EggCountValue = (typeof eggOptions)[number] | 0;
 
-function StarIcon({ filled }: { filled: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 576 512"
-      height="1em"
-      xmlns="http://www.w3.org/2000/svg"
-      className={filled ? "star-solid text-[#ffd666]" : "star-solid text-zinc-500"}
-      aria-hidden="true"
-    >
-      <path
-        d="M316.9 18C311.6 7 300.4 0 288.1 0s-23.4 7-28.8 18L195 150.3 51.4 171.5c-12 1.8-22 10.2-25.7 21.7s-.7 24.2 7.9 32.7L137.8 329 113.2 474.7c-2 12 3 24.2 12.9 31.3s23 8 33.8 2.3l128.3-68.5 128.3 68.5c10.8 5.7 23.9 4.9 33.8-2.3s14.9-19.3 12.9-31.3L438.5 329 542.7 225.9c8.6-8.5 11.7-21.2 7.9-32.7s-13.7-19.9-25.7-21.7L381.2 150.3 316.9 18z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
+const evaluationFormUrl = "https://forms.gle/whdSaQpm6TXuWYfJ9";
 
 function GooseDescription({ text, gooseId }: { text: string; gooseId: GooseKind }) {
   const [expanded, setExpanded] = useState(false);
@@ -176,12 +159,9 @@ export default function Home() {
   const [selected, setSelected] = useState<GooseKind>("original");
   const [guestName, setGuestName] = useState("");
   const [eggCount, setEggCount] = useState<EggCountValue>(0);
-  const [comment, setComment] = useState("");
-  const [rating, setRating] = useState<RatingValue>(0);
   const [sending, setSending] = useState(false);
   const [nameMessage, setNameMessage] = useState("");
   const [eggMessage, setEggMessage] = useState("");
-  const [ratingMessage, setRatingMessage] = useState("");
 
   // สร้าง State สำหรับเก็บ ID ของเรคคอร์ดที่ถูกสร้างขึ้นใน Step 2
   const [eventId, setEventId] = useState<string | null>(null);
@@ -226,8 +206,6 @@ export default function Home() {
       // ดันข้อมูลที่เซฟจริงไปให้หน้าจอ Display แสดงผล
       broadcastOptimisticGoose(result.event);
 
-      // เปลี่ยนหน้าไปที่ Step ถัดไป
-      // setStep("thanks");
       setStep("success");
     } catch (error) {
       alert(error instanceof Error ? error.message : "เกิดข้อผิดพลาด");
@@ -236,51 +214,9 @@ export default function Home() {
     }
   }
 
-  // Step 3 -> บันทึกการอัปเดต (คะแนน & คอมเมนต์) ลง DB
-  async function submitFeedback() {
-    if (rating < 1) {
-      setRatingMessage("กรุณาให้คะแนนก่อนยืนยัน");
-      return;
-    }
-
-    if (!eventId) {
-      setRatingMessage("เกิดข้อผิดพลาด ไม่พบข้อมูลห่านที่ส่งไปแล้ว");
-      return;
-    }
-
-    setSending(true);
-    setRatingMessage("");
-    try {
-      // ยิง PATCH เพื่ออัปเดตเรคคอร์ดเดิมที่ได้ ID มา
-      const response = await fetch("/api/goose", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: eventId,
-          rating,
-          comment: comment.trim() || null,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => null);
-        throw new Error(error?.error ?? "บันทึกไม่สำเร็จ");
-      }
-
-      resetForm();
-      setStep("success");
-    } catch (error) {
-      setRatingMessage(error instanceof Error ? error.message : "บันทึกไม่สำเร็จ");
-    } finally {
-      setSending(false);
-    }
-  }
-
   function resetForm() {
     setGuestName("");
     setEggCount(0);
-    setComment("");
-    setRating(0);
     setSelected("original");
     setEventId(null);
     setNameMessage("");
@@ -319,17 +255,12 @@ export default function Home() {
       broadcastOptimisticGoose(result.event);
 
       resetForm();
-      setStep("details");
+      setStep("thanks");
     } catch (error) {
       setEggMessage(error instanceof Error ? error.message : "บันทึกไม่สำเร็จ");
     } finally {
       setSending(false);
     }
-  }
-
-  function handleSkipFeedback() {
-    resetForm();
-    setStep("details");
   }
 
   return (
@@ -364,11 +295,10 @@ export default function Home() {
                         }}
                         aria-pressed={isSelected}
                         disabled={sending}
-                        className={`flex h-12 w-12 items-center justify-center rounded-2xl border text-lg font-semibold transition sm:h-14 sm:w-14 sm:text-xl disabled:cursor-not-allowed disabled:opacity-60 ${
-                          isSelected
-                            ? "border-yellow-400/60 bg-yellow-400/20 text-yellow-200"
-                            : "border-white/10 bg-white/5 text-zinc-200 hover:border-yellow-400/30 hover:bg-yellow-400/10"
-                        }`}
+                        className={`flex h-12 w-12 items-center justify-center rounded-2xl border text-lg font-semibold transition sm:h-14 sm:w-14 sm:text-xl disabled:cursor-not-allowed disabled:opacity-60 ${isSelected
+                          ? "border-yellow-400/60 bg-yellow-400/20 text-yellow-200"
+                          : "border-white/10 bg-white/5 text-zinc-200 hover:border-yellow-400/30 hover:bg-yellow-400/10"
+                          }`}
                       >
                         {count}
                       </button>
@@ -387,68 +317,22 @@ export default function Home() {
               </button>
             </div>
           </div>
-        // ) : step === "thanks" ? (
-        //   <div className="mx-auto w-full max-w-2xl rounded-3xl border border-white/10 bg-zinc-950/80 p-6 shadow-2xl shadow-black/30">
-        //     <div className="space-y-8">
-        //       <div className="text-center">
-        //         <p className="text-3xl font-medium text-zinc-100">ห่านของคุณแสดงแล้ว!</p>
-        //         <p className="mt-2 text-zinc-400">กรุณาให้ความพึงพอใจและคำแนะนำ</p>
-        //       </div>
-
-        //       <div className="space-y-2 text-left">
-        //         <div className="flex items-center gap-3">
-        //           <span className="block text-lg font-medium text-zinc-200">ความพึงพอใจ</span>
-        //           {ratingMessage ? <p className="text-sm text-red-400">{ratingMessage}</p> : null}
-        //         </div>
-        //         <div className="rating mt-3 flex items-center justify-center gap-2">
-        //           {starOptions.map((star) => (
-        //             <div key={star} className="relative">
-        //               <input
-        //                 type="radio"
-        //                 id={`star${star}`}
-        //                 name="rate"
-        //                 value={star}
-        //                 checked={rating === star}
-        //                 onChange={() => {
-        //                   setRating(star);
-        //                   if (ratingMessage) setRatingMessage("");
-        //                 }}
-        //                 className="peer absolute h-0 w-0 opacity-0"
-        //               />
-        //               <label
-        //                 htmlFor={`star${star}`}
-        //                 className="cursor-pointer p-1.5 text-4xl transition-transform duration-150 hover:scale-110 peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-yellow-400/60 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-black"
-        //               >
-        //                 <StarIcon filled={rating >= star} />
-        //               </label>
-        //             </div>
-        //           ))}
-        //         </div>
-        //       </div>
-
-        //       <label className="block text-left">
-        //         <span className="text-lg font-medium text-zinc-200">ความคิดเห็น (ไม่บังคับ)</span>
-        //         <textarea
-        //           value={comment}
-        //           onChange={(event) => setComment(event.target.value)}
-        //           placeholder="พิมพ์ความคิดเห็นเพิ่มเติมได้ที่นี่"
-        //           rows={4}
-        //           className="mt-4 w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-zinc-500 focus:border-yellow-400/60 focus:bg-white/10"
-        //         />
-        //       </label>
-
-        //       <div className="flex flex-col gap-3">
-        //         <button
-        //           type="button"
-        //           onClick={submitFeedback}
-        //           disabled={sending}
-        //           className="w-full rounded-full border border-yellow-400/30 bg-yellow-400/10 px-6 py-3 text-lg font-medium text-yellow-200 transition hover:bg-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-60"
-        //         >
-        //           {sending ? "กำลังบันทึก..." : "ยืนยัน"}
-        //         </button>
-        //       </div>
-        //     </div>
-        //   </div>
+        ) : step === "thanks" ? (
+          <div className="mx-auto w-full max-w-2xl rounded-3xl border border-white/10 bg-zinc-950/80 p-6 shadow-2xl shadow-black/30">
+            <div className="flex flex-col items-center gap-8 text-center">
+              <p className="text-3xl font-medium text-zinc-100">ช่วยให้กำลังใจเราโดยการ</p>
+              <div className="flex w-full flex-col gap-3">
+                <a
+                  href={evaluationFormUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex w-full items-center justify-center rounded-full border border-yellow-400/30 bg-yellow-400/10 px-6 py-3 text-lg font-medium text-yellow-200 transition hover:bg-yellow-400/20"
+                >
+                  ทำแบบประเมินผลงาน
+                </a>
+              </div>
+            </div>
+          </div>
         ) : step === "details" ? (
           <div className="mx-auto w-full max-w-2xl rounded-3xl border border-white/10 bg-zinc-950/80 p-4 shadow-2xl shadow-black/30">
             <div className="space-y-6">
